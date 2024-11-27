@@ -1,0 +1,24 @@
+import io.vertx.core.Future;
+import io.vertx.core.json.JsonObject;
+import io.vertx.core.json.JsonArray;
+import io.vertx.ext.jdbc.JDBCClient;
+
+public class FileDownloadService {
+    private final JDBCClient client;
+
+    public FileDownloadService(JDBCClient client) {
+        this.client = client;
+    }
+
+    public Future<JsonObject> getFileByJiraId(String jiraId) {
+        String query = "SELECT filename, filecontent FROM file_store WHERE jira_id = ?";
+        return client.queryWithParams(query, new JsonArray().add(jiraId))
+            .map(result -> {
+                if (!result.getRows().isEmpty()) {
+                    return result.getRows().get(0);
+                } else {
+                    throw new RuntimeException("File not found for Jira ID: " + jiraId);
+                }
+            });
+    }
+}
