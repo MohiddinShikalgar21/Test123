@@ -1,0 +1,41 @@
+import io.vertx.core.Handler;
+import io.vertx.core.buffer.Buffer;
+import io.vertx.ext.web.RoutingContext;
+import io.vertx.sqlclient.Pool;
+
+public class FileDownloadController implements Handler<RoutingContext> {
+    private final Pool pool;
+    private final FileDownloadService fileDownloadService;
+
+    public FileDownloadController(Pool pool, FileDownloadService fileDownloadService) {
+        this.pool = pool;
+        this.fileDownloadService = fileDownloadService;
+    }
+
+    @Override
+    public void handle(RoutingContext context) {
+        String jiraId = context.request().getParam("jiraId");
+
+        if (jiraId == null || jiraId.isEmpty()) {
+            context.response().setStatusCode(400).end("Jira ID is required.");
+            return;
+        }
+
+        // Acquire a connection from the pool
+        pool.getConnection().compose(connection -> {
+            // Use the connection to fetch the file
+            return fileDownloadService.getFileByJiraId(connection, jiraId)
+                .onComplete(ar -> connection.close()); // Ensure the connection is closed after use
+        }).onSuccess(file -> {
+            String filename = file.getString("filename");
+            String fileContent = file.getString("filecontent"); // Assuming CLOB is retrieved as String
+
+            context.response()
+                .putHeader("Content-Type", "application/octet-stream")
+                .putHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .end(Buffer.buffer(fileContent));
+        }).onFailure(err -> {
+            context.response().setStatusCode(404).end(err.getMessage());
+        });
+    }
+}
