@@ -1,0 +1,47 @@
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Promise;
+import io.vertx.core.json.JsonObject;
+import io.vertx.ext.web.Router;
+import io.vertx.ext.web.handler.BodyHandler;
+import io.vertx.sqlclient.Pool;
+import io.vertx.sqlclient.PoolOptions;
+import io.vertx.mysqlclient.MySQLConnectOptions;
+
+public class MainVerticle extends AbstractVerticle {
+    @Override
+    public void start(Promise<Void> startPromise) {
+        // 1. Configure MySQL client
+        MySQLConnectOptions connectOptions = new MySQLConnectOptions()
+            .setPort(3307) // Replace with your DB port
+            .setHost("localhost") // Replace with your DB host
+            .setDatabase("yourdb") // Replace with your database name
+            .setUser("youruser") // Replace with your DB username
+            .setPassword("yourpassword"); // Replace with your DB password
+
+        PoolOptions poolOptions = new PoolOptions().setMaxSize(5);
+
+        // 2. Create the database client (Pool)
+        Pool dbClient = Pool.pool(vertx, connectOptions, poolOptions);
+
+        // 3. Pass dbClient to the service
+        FileDownloadService fileDownloadService = new FileDownloadService(dbClient);
+
+        // 4. Initialize the controller
+        FileDownloadController fileDownloadController = new FileDownloadController(fileDownloadService);
+
+        // 5. Set up the router
+        Router router = Router.router(vertx);
+        router.route().handler(BodyHandler.create()); // For handling request bodies
+        router.get("/api/files/download").handler(fileDownloadController);
+
+        // 6. Start the HTTP server
+        vertx.createHttpServer().requestHandler(router).listen(8080, http -> {
+            if (http.succeeded()) {
+                startPromise.complete();
+                System.out.println("HTTP server started on port 8080");
+            } else {
+                startPromise.fail(http.cause());
+            }
+        });
+    }
+}
