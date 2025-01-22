@@ -1,70 +1,70 @@
+@VertxRoute(value = "/kickoffs-cutoffs", method = "GET", filterClass = JWTAuthFilter.class, description = GET_ALL_API_DESCRIPTION)
+public void getAllKickoffCutoff(RoutingContext routingContext) {
+    try {
+        // Use virtual threads to make the call and handle the result synchronously
+        List<KickoffCutoffEntity> entities = kickoffCutoffService.findAll(); 
+
+        String message;
+        RestResponse<?> restResponse;
+
+        if (entities == null || entities.isEmpty()) {
+            message = "Not found";
+            log.info(message);
+            restResponse = RestResponse.builder()
+                    .status(404)
+                    .msg(message)
+                    .build();
+        } else {
+            message = "Found Kickoff and cutoffs";
+            log.info(message);
+            restResponse = RestResponse.builder()
+                    .status(200)
+                    .msg(message)
+                    .data(entities)
+                    .build();
+        }
+
+        sendResponse(routingContext, restResponse);
+    } catch (Exception e) {
+        log.error("Error occurred while fetching Kickoff and Cutoff entities: {}", e.getMessage(), e);
+        sendErrorResponse(routingContext, e);
+    }
+}
+
+
+
+public List<KickoffCutoffEntity> findAll() {
+    try (var connection = applicationContext.getOracleJdbcPool().getConnection()) {
+        // Execute the repository method synchronously
+        List<KickoffCutoffEntity> results = kickoffCutoffRepository.findAll(connection);
+
+        log.info("Successfully queried kickoff cutoff");
+        return results;
+    } catch (Exception e) {
+        log.error("Error querying kickoff cutoff: {}", e.getMessage(), e);
+        throw new RuntimeException("Failed to fetch kickoff cutoff entities", e);
+    }
+}
+
+
+
 public class KickoffCutoffRepository {
 
-private static final String KICKOFF_CUTOFF_SELECT_ALL =
-"""
-SELECT ID, CURRENCY_ISO_CODE, OUR_ENTITY_ID, SETTLEMENT_METHOD, CALENDAR_CODE, TIMEZONE, CUTOFF_LAG, CUTOFF_TIME, TYPE, MESSAGE_TYPE, KICKOFF_LAG, KICKOFF_TIME, 
-BUSINESS FILTERS FROM KICKOFF_CUTOFF""";
+    private static final String KICKOFF_CUTOFF_SELECT_ALL = """
+        SELECT ID, CURRENCY_ISO_CODE, OUR_ENTITY_ID, SETTLEMENT_METHOD, CALENDAR_CODE, TIMEZONE, CUTOFF_LAG,
+        CUTOFF_TIME, TYPE, MESSAGE_TYPE, KICKOFF_LAG, KICKOFF_TIME, BUSINESS_FILTERS FROM KICKOFF_CUTOFF
+    """;
 
-public Future<List<KickoffCutoffEntity>> findAll(SqlConnection connection) {
-
-return SqlTemplate
-
-forQuery(connection, KICKOFF_CUTOFF_SELECT_ALL)
-
-.mapTo(KickoffCutoffEntity.class)
-
-execute(Collections.emptyMap())
-
-.map(rowSet -> {
-
-List<KickoffCutoffEntity> entityRoleContactEntities = new ArrayList<>();
-
-rowSet.forEach(entityRoleContactEntities::add);
-
-return entityRoleContactEntities;
-}). 
-onSuccess(success -> log.info(CALLED SUCCESS, "Find All KickoffCutoffEntity"))
-
-.onFailure (throwable -> log.error(String.format(CALLED ERROR, "Find All KickoffCutoffEntity", throwable.getMessage()), throwable)) ;
-
-
-
-@VertxRoute (value = "/kickoffs-cutoffs", method "GET", filterClass = JWTAuthFilter.class, description = GET_ALL_API_DESCRIPTION)
-
-public void getAllKickoffCutoff (RoutingContext routingContext) {
-
-kickoffCutoffService.findAll()
-. map(e -> {
-String message;
-if(e==null) {
-message = "not found";
-log.info(message) ;
-return RestResponse.builder().status(404).msg(message).build();
-} else {
-StringBuilder sb = new StringBuilder("Success get entity role contact with berId of %s");
-
-message = "Found Kickoff and cutoffs";
-
-log.info(message);
-
-return RestResponse.<->builder().status(200).msg(message).data(e).build();
-
-}) 
-
-.onSuccess(restResponse -> sendResponse (routingContext, restResponse))
-
-.onFailure (throwable -> sendErrorResponse (routingContext, throwable));
-
-
-
-public Future<List<KickoffCutoffEntity>> FindAll() {
-
-return applicationContext.getOracleJdbcPool().withConnection(
-
-connection -> kickoffCutoffRepository.findAll(connection) 
-
-.onSuccess (success -> log.info("Successfully queried kickoff cutoff"));
-.onFailure (throwable -> log.error(throwable.getMessage())));
-
-}
+    public List<KickoffCutoffEntity> findAll(SqlConnection connection) {
+        try {
+            return SqlTemplate.forQuery(connection, KICKOFF_CUTOFF_SELECT_ALL)
+                    .mapTo(KickoffCutoffEntity.class)
+                    .execute(Collections.emptyMap())
+                    .map(rowSet -> rowSet.stream().toList()) // Collect rows into a list
+                    .result(); // Waits for the result synchronously in a virtual thread
+        } catch (Exception e) {
+            log.error("CALLED ERROR: Find All KickoffCutoffEntity - {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to fetch KickoffCutoffEntity records", e);
+        }
+    }
 }
