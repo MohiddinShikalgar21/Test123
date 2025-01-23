@@ -1,0 +1,33 @@
+import java.util.concurrent.StructuredTaskScope;
+
+public List<KickoffCutoffEntity> findAll() {
+    try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
+        // Submit a task to get the connection
+        var connectionFuture = scope.fork(() -> applicationContext.getOracleJdbcPool()
+                .getConnection()
+                .toCompletionStage()
+                .toCompletableFuture()
+                .join());
+
+        // Wait for the connection task to complete
+        scope.join();
+        scope.throwIfFailed();
+
+        // Get the connection result
+        SqlConnection connection = connectionFuture.get();
+
+        try {
+            // Call the repository method
+            List<KickoffCutoffEntity> results = kickoffCutoffRepository.findAll(connection);
+
+            log.info("Successfully queried kickoff cutoff");
+            return results;
+        } finally {
+            connection.close()
+                    .onFailure(throwable -> log.error("Error closing connection: {}", throwable.getMessage(), throwable));
+        }
+    } catch (Exception e) {
+        log.error("Error querying kickoff cutoff: {}", e.getMessage(), e);
+        throw new RuntimeException("Failed to fetch kickoff cutoff entities", e);
+    }
+}
