@@ -68,3 +68,60 @@ public class KickoffCutoffRepository {
         }
     }
 }
+
+
+
+
+
+
+public List<KickoffCutoffEntity> findAll() {
+    SqlConnection connection = null;
+    try {
+        // Get the connection synchronously using a blocking mechanism
+        connection = getConnectionSynchronously();
+
+        // Execute the repository method synchronously
+        List<KickoffCutoffEntity> results = kickoffCutoffRepository.findAll(connection);
+
+        log.info("Successfully queried kickoff cutoff");
+        return results;
+    } catch (Exception e) {
+        log.error("Error querying kickoff cutoff: {}", e.getMessage(), e);
+        throw new RuntimeException("Failed to fetch kickoff cutoff entities", e);
+    } finally {
+        if (connection != null) {
+            connection.close()
+                .onFailure(throwable -> log.error("Error closing connection: {}", throwable.getMessage(), throwable));
+        }
+    }
+}
+
+private SqlConnection getConnectionSynchronously() {
+    final CountDownLatch latch = new CountDownLatch(1);
+    final AtomicReference<SqlConnection> connectionRef = new AtomicReference<>();
+    final AtomicReference<Throwable> errorRef = new AtomicReference<>();
+
+    applicationContext.getOracleJdbcPool().getConnection()
+        .onSuccess(connection -> {
+            connectionRef.set(connection);
+            latch.countDown();
+        })
+        .onFailure(throwable -> {
+            errorRef.set(throwable);
+            latch.countDown();
+        });
+
+    try {
+        latch.await(); // Block the current thread until the connection is obtained
+    } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new RuntimeException("Thread interrupted while waiting for connection", e);
+    }
+
+    if (errorRef.get() != null) {
+        throw new RuntimeException("Failed to obtain connection", errorRef.get());
+    }
+
+    return connectionRef.get();
+}
+
