@@ -19,7 +19,6 @@ public List<KickoffCutoffEntity> findAll() {
         try {
             // Call the repository method
             List<KickoffCutoffEntity> results = kickoffCutoffRepository.findAll(connection);
-
             log.info("Successfully queried kickoff cutoff");
             return results;
         } finally {
@@ -31,3 +30,24 @@ public List<KickoffCutoffEntity> findAll() {
         throw new RuntimeException("Failed to fetch kickoff cutoff entities", e);
     }
 }
+
+
+
+
+
+
+public List<KickoffCutoffEntity> findAll() throws Exception {
+    try (var executor = Thread.ofVirtual().factory().newThreadExecutor()) {
+        return executor.submit(() -> {
+            try (var connection = applicationContext.getOracleJdbcPool().getConnection()) {
+                var results = kickoffCutoffRepository.findAll(connection);
+                log.info("Successfully queried kickoff cutoff");
+                return results;
+            } catch (Exception e) {
+                log.error("Error querying kickoff cutoff: {}", e.getMessage(), e);
+                throw e;
+            }
+        }).get(); // Block until the task completes
+    }
+}
+
