@@ -1,0 +1,88 @@
+@VertxRoute(value = "/kickoffs-cutoffs", method = "GET", filterClass = JWTAuthFilter.class, description = GET_ALL_API_DESCRIPTION)
+public void getAllKickoffCutoff(RoutingContext routingContext) {
+    // Run in a virtual thread
+    Thread.startVirtualThread(() -> {
+        try {
+            List<KickoffCutoffEntity> entities = kickoffCutoffService.findAll()
+                    .toCompletionStage()
+                    .toCompletableFuture()
+                    .join();
+
+            RestResponse response;
+            if (entities == null || entities.isEmpty()) {
+                String message = "Not found";
+                log.info(message);
+                response = RestResponse.builder()
+                        .status(404)
+                        .msg(message)
+                        .build();
+            } else {
+                String message = "Found Kickoff and cutoffs";
+                log.info(message);
+                response = RestResponse.builder()
+                        .status(200)
+                        .msg(message)
+                        .data(entities)
+                        .build();
+            }
+
+            sendResponse(routingContext, response);
+        } catch (Exception e) {
+            log.error("Error fetching KickoffCutoff entities", e);
+            sendErrorResponse(routingContext, e);
+        }
+    });
+}
+
+
+
+public class KickoffCutoffService {
+
+    public Future<List<KickoffCutoffEntity>> findAll() {
+        // Using withConnection to manage the connection lifecycle
+        return applicationContext.getOracleJdbcPool().withConnection(connection -> {
+            // Call the repository method and return the Future
+            return kickoffCutoffRepository.findAll(connection);
+        }).onSuccess(entities -> log.info("Successfully retrieved KickoffCutoff entities"))
+          .onFailure(e -> log.error("Error retrieving KickoffCutoff entities", e));
+    }
+}
+
+
+public class KickoffCutoffRepository {
+
+    private static final String KICKOFF_CUTOFF_SELECT_ALL = """
+        SELECT ID, CURRENCY_ISO_CODE, OUR_ENTITY_ID, SETTLEMENT_METHOD, CALENDAR_CODE, TIMEZONE, CUTOFF_LAG, CUTOFF_TIME, 
+               TYPE, MESSAGE_TYPE, KICKOFF_LAG, KICKOFF_TIME, BUSINESS_FILTERS 
+        FROM KICKOFF_CUTOFF
+        """;
+
+    public Future<List<KickoffCutoffEntity>> findAll(SqlConnection connection) {
+        return connection
+                .preparedQuery(KICKOFF_CUTOFF_SELECT_ALL)
+                .execute()
+                .map(rows -> {
+                    List<KickoffCutoffEntity> entities = new ArrayList<>();
+                    rows.forEach(row -> {
+                        KickoffCutoffEntity entity = new KickoffCutoffEntity();
+                        entity.setId(row.getInteger("ID"));
+                        entity.setCurrencyIsoCode(row.getString("CURRENCY_ISO_CODE"));
+                        entity.setOurEntityId(row.getInteger("OUR_ENTITY_ID"));
+                        entity.setSettlementMethod(row.getString("SETTLEMENT_METHOD"));
+                        entity.setCalendarCode(row.getString("CALENDAR_CODE"));
+                        entity.setTimezone(row.getString("TIMEZONE"));
+                        entity.setCutoffLag(row.getInteger("CUTOFF_LAG"));
+                        entity.setCutoffTime(row.getLocalTime("CUTOFF_TIME"));
+                        entity.setType(row.getString("TYPE"));
+                        entity.setMessageType(row.getString("MESSAGE_TYPE"));
+                        entity.setKickoffLag(row.getInteger("KICKOFF_LAG"));
+                        entity.setKickoffTime(row.getLocalTime("KICKOFF_TIME"));
+                        entity.setBusinessFilters(row.getString("BUSINESS_FILTERS"));
+                        entities.add(entity);
+                    });
+                    log.info("Successfully queried kickoff and cutoff entities");
+                    return entities;
+                })
+                .onFailure(e -> log.error("Error executing query for KickoffCutoff entities", e));
+    }
+}
